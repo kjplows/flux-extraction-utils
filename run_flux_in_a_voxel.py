@@ -11,6 +11,7 @@ from colorama import Fore
 from tqdm import tqdm
 import time
 from copy import deepcopy
+from collections import defaultdict
 
 NPROCESS_MAX = 50 # No more threads than this.
 enu_bins = np.arange(0.0, 10.05, 0.05) # Standard beamHist binning, 200 bins
@@ -47,6 +48,12 @@ pdgs = {
 
 colours = [Fore.RED, Fore.YELLOW, Fore.GREEN, Fore.CYAN, Fore.MAGENTA]
 
+flavours = ["nue", "nuebar", "numu", "numubar"]
+parents  = ["muon", "pion", "kzero", "kaon"]
+secondaries = ["pimu", "pinomu", "kzero", "kaon", "nucleon"]
+sec_titles  = ["pion->...->muon", "pion->...->(not-muon)",
+               "kzero->...", "kaon->...", "nucleon->..."]
+
 # A wrapper around uproot.writing.identify.to_TH1x
 # note that to_TH1x expects first and last bin under/overflow
 def construct_uproot_hist(data, bins=None, entries=None, sumw2s=None, name=None, title=None, axis_titles=None):
@@ -81,21 +88,6 @@ def construct_uproot_hist(data, bins=None, entries=None, sumw2s=None, name=None,
 class BeamHistClass:
     """A container for histograms exactly like what is written in beamHist"""
     # Edit, August 17th: Introduce lists of [counts, sumw2s, entries].
-
-    '''
-            'sFlux': { # For cumulative fluxes at the face, sumw2
-                'numu'   : np.zeros( Nbins ),
-                'numubar': np.zeros( Nbins ),
-                'nue'    : np.zeros( Nbins ),
-                'nuebar' : np.zeros( Nbins )
-            },
-            'eFlux': { # Track N entries
-                'numu'   : 0,
-                'numubar': 0,
-                'nue'    : 0,
-                'nuebar' : 0
-            },
-    '''
     
     def __init__(self):
         self.data = {
@@ -210,7 +202,7 @@ class BeamHistClass:
 # bsim::Decay object. Plus, it accepts vectorised numpy operations.
 #
 # Edit, August 9th: Extrude the calculation along z.
-# # decay is a dictionary from N eFlux, xy and z is a numpy array of shape (2, N) and (M, N)
+# # decay is a dictionary from N entries, xy and z is a numpy array of shape (2, N) and (M, N)
 def calc_enu_wgt( decay, xy, z ):
 
     # For convenience, just name the decay variables
@@ -428,71 +420,27 @@ def individual_thread(queue, result, index=0, xy=None, side=None, z=None):
                         
                         # Build a dictionary of histogram type <-- mask to use
                         mask_dict = {
-                            'hFlux': {
-                                'numu'   : mask_type_numu,
-                                'numubar': mask_type_numubar,
-                                'nue'    : mask_type_nue,
-                                'nuebar' : mask_type_nuebar
-                            } ,
-                            'hparent': {
-                                'numu'   : {
-                                    'muon' : mask_type_numu    & mask_parent_muon,
-                                    'pion' : mask_type_numu    & mask_parent_pion,
-                                    'kaon' : mask_type_numu    & mask_parent_kaon,
-                                    'kzero': mask_type_numu    & mask_parent_kzero,
-                                },
-                                'numubar': {
-                                    'muon' : mask_type_numubar & mask_parent_muon,
-                                    'pion' : mask_type_numubar & mask_parent_pion,
-                                    'kaon' : mask_type_numubar & mask_parent_kaon,
-                                    'kzero': mask_type_numubar & mask_parent_kzero,
-                                },
-                                'nue'    : {
-                                    'muon' : mask_type_nue     & mask_parent_muon,
-                                    'pion' : mask_type_nue     & mask_parent_pion,
-                                    'kaon' : mask_type_nue     & mask_parent_kaon,
-                                    'kzero': mask_type_nue     & mask_parent_kzero,
-                                },
-                                'nuebar' : {
-                                    'muon' : mask_type_nuebar  & mask_parent_muon,
-                                    'pion' : mask_type_nuebar  & mask_parent_pion,
-                                    'kaon' : mask_type_nuebar  & mask_parent_kaon,
-                                    'kzero': mask_type_nuebar  & mask_parent_kzero,
-                                }
-                            } ,
-                            'hsec': {
-                                'numu'   : {
-                                    'pimu'   : mask_type_numu    & mask_sec_pimu,
-                                    'pinomu' : mask_type_numu    & mask_sec_pinomu,
-                                    'kzero'  : mask_type_numu    & mask_sec_kzero,
-                                    'kaon'   : mask_type_numu    & mask_sec_kaon,
-                                    'nucleon': mask_type_numu    & mask_sec_nucleon
-                                },
-                                'numubar': {
-                                    'pimu'   : mask_type_numubar & mask_sec_pimu,
-                                    'pinomu' : mask_type_numubar & mask_sec_pinomu,
-                                    'kzero'  : mask_type_numubar & mask_sec_kzero,
-                                    'kaon'   : mask_type_numubar & mask_sec_kaon,
-                                    'nucleon': mask_type_numubar & mask_sec_nucleon
-                                },
-                                'nue'    : {
-                                    'pimu'   : mask_type_nue     & mask_sec_pimu,
-                                    'pinomu' : mask_type_nue     & mask_sec_pinomu,
-                                    'kzero'  : mask_type_nue     & mask_sec_kzero,
-                                    'kaon'   : mask_type_nue     & mask_sec_kaon,
-                                    'nucleon': mask_type_nue     & mask_sec_nucleon
-                                },
-                                'nuebar' : {
-                                    'pimu'   : mask_type_nuebar  & mask_sec_pimu,
-                                    'pinomu' : mask_type_nuebar  & mask_sec_pinomu,
-                                    'kzero'  : mask_type_nuebar  & mask_sec_kzero,
-                                    'kaon'   : mask_type_nuebar  & mask_sec_kaon,
-                                    'nucleon': mask_type_nuebar  & mask_sec_nucleon
-                                }
-                            }
+                            'hFlux'   : defaultdict( np.ndarray ),
+                            'hparent' : defaultdict( dict ),
+                            'hsec'    : defaultdict( dict )
                         }
+                        flavour_masks   = [ mask_type_nue, mask_type_nuebar,
+                                            mask_type_numu, mask_type_numubar ]
+                        parent_masks    = [ mask_parent_muon, mask_parent_pion,
+                                            mask_parent_kzero, mask_parent_kaon ]
+                        secondary_masks = [ mask_sec_pimu, mask_sec_pinomu,
+                                            mask_sec_kzero, mask_sec_kaon, mask_sec_nucleon ]
 
-                        # Get number of eFlux. N entries == how many elements in masked array of ones == sum of this masked array
+                        for flav, fmask in zip(flavours, flavour_masks):
+                            mask_dict['hFlux'][flav]   = fmask
+                            mask_dict['hparent'][flav] = defaultdict( np.ndarray )
+                            mask_dict['hsec'][flav]    = defaultdict( np.ndarray )
+                            for par, pmask in zip(parents, parent_masks):
+                                mask_dict['hparent'][flav][par] = fmask & pmask
+                            for sec, smask in zip(secondaries, secondary_masks):
+                                mask_dict['hsec'][flav][sec] = fmask & smask
+
+                        # Get N entries == how many elements in masked array of ones == sum of this masked array
                         nent = np.ones(enus.shape[1])
                         
                         # Fill histograms.
@@ -633,7 +581,7 @@ This is bad for performance (especially on a gpvm...). Reducing down to {NPROCES
             det["x"] = np.histogram([args.detector[0]], bins=1)
             det["y"] = np.histogram([args.detector[1]], bins=1)
 
-            for flav in ["nue", "nuebar", "numu", "numubar"]:
+            for flav in flavours:
                 dflav = det.mkdir(flav)
                 pdflav = dflav.mkdir("Flux by parent")
                 sdflav = dflav.mkdir("Flux by secondary")
@@ -649,7 +597,7 @@ This is bad for performance (especially on a gpvm...). Reducing down to {NPROCES
                 )
 
                 # Flux by parent.
-                for par in ["muon", "pion", "kzero", "kaon"]:
+                for par in parents:
                     pdflav[f"{flav} from {par}"] = construct_uproot_hist(
                         fc.data["hparent"][flav][par][0],
                         bins = enu_bins,
@@ -660,11 +608,7 @@ This is bad for performance (especially on a gpvm...). Reducing down to {NPROCES
                     )
 
                 # Flux by secondary.
-                for sec, psec in zip(
-                        ["pimu", "pinomu", "kzero", "kaon", "nucleon"],
-                        ["pion->...->muon", "pion->...->(not-muon)",
-                         "kzero->...", "kaon->...", "nucleon->..."]
-                ):
+                for sec, psec in zip( secondaries, sec_titles ):
                     sdflav[f"{flav} from {sec}"] = construct_uproot_hist(
                         fc.data["hsec"][flav][sec][0],
                         bins = enu_bins,

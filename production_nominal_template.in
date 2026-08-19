@@ -1,0 +1,257 @@
+# NuBeam options file
+
+/boone/rndm/setRndmSeed REPLACE_SEED
+#Set primary particle here since some cross section arrays in BooNEpBE are
+#filled depending on primary energy
+/gun/particle proton
+/gun/energy 8.0 GeV
+
+#
+# construct the geometry..,as we have settle the geometry... 
+#
+/boone/geometry/geometryfile REPLACE_GEOMETRY
+/run/initialize
+
+# If we're using BooNE cross sections, specify momentum range in GeV/c
+# GHEISHA will be used elsewhere
+/boone/crosssections/proton/proBeMomentumRange    2.0 11.0
+/boone/crosssections/proton/proAlMomentumRange    2.0 11.0
+/boone/crosssections/neutron/neuBeMomentumRange   2.0 11.0
+/boone/crosssections/neutron/neuAlMomentumRange   2.0 11.0
+/boone/crosssections/pionplus/pipBeMomentumRange  0.5 11.0
+/boone/crosssections/pionplus/pipAlMomentumRange  0.5 11.0
+/boone/crosssections/pionminus/pimBeMomentumRange 0.5 11.0
+/boone/crosssections/pionminus/pimAlMomentumRange 0.5 11.0
+
+# now the cross sections parametrizations parameters for the BooNE model
+# proton cross sections
+/boone/crosssections/proton/totProBeXsecPar   307.8    0.897   0.000304  -2.598  -4.973
+/boone/crosssections/proton/ineProBeXsecPar  -126.08 420.02   -0.579     -6.802 115.47
+/boone/crosssections/proton/qelProBeXsecPar  -550.7  675.6    -0.168      8.247  35.65
+/boone/crosssections/proton/totProAlXsecPar   760.3   -0.056   2.485    6.172   -41.60
+/boone/crosssections/proton/ineProAlXsecPar   470.94  -0.259   2.429   48.86    -87.18
+/boone/crosssections/proton/qelProAlXsecPar   264.50   0.0    -0.9136  32.24   -155.80
+
+#neutron cross sections
+/boone/crosssections/neutron/totNeuBeXsecPar  307.8    0.897   0.000304  -2.598  -4.973
+/boone/crosssections/neutron/ineNeuBeXsecPar -126.08 420.02   -0.579     -6.802 115.47
+/boone/crosssections/neutron/qelNeuBeXsecPar -550.7  675.6    -0.168      8.247  35.65
+/boone/crosssections/neutron/totNeuAlXsecPar  760.3   -0.056   2.485    6.172   -41.60
+/boone/crosssections/neutron/ineNeuAlXsecPar  470.94  -0.259   2.429   48.86    -87.18
+/boone/crosssections/neutron/qelNeuAlXsecPar  264.50   0.0    -0.9136  32.24   -155.80
+
+# pion plus cross sections
+/boone/crosssections/pionplus/totPipBeXsecPar    0.6  0.8138 3.418  237.6   111.29     -4.186    -9.792   0.0
+/boone/crosssections/pionplus/inePipBeXsecPar  850.6  1.2006 0.3752   0.400   5.142   162.32    -99.89   -2.406   -0.4202
+/boone/crosssections/pionplus/qelPipBeXsecPar  379.9  1.2006 0.557    0.634   3.784    -2.377   -81.84   -2.703    3.173   0.0
+/boone/crosssections/pionplus/totPipAlXsecPar    0.8  0.9741 3.585  574.9   642.63     -4.548   -19.98    0.0
+/boone/crosssections/pionplus/inePipAlXsecPar  510.6  1.1888 0.185    0.295   2.3067 1545.7   -1117.7     0.0565  14.37    0.0
+/boone/crosssections/pionplus/qelPipAlXsecPar  229.4  1.1888 0.1886   0.698   2.134    40.38     89.20   -1.574    0.335   0.0
+
+# pion minus cross sections
+/boone/crosssections/pionminus/totPimBeXsecPar   0.6  0.8579 2.4738  226.93   135.32   -2.826   -7.484   0.0
+/boone/crosssections/pionminus/inePimBeXsecPar 371.5  1.2006 0.2327    0.600    2.874  92.66   112.2    -0.4861   7.500   0.0
+/boone/crosssections/pionminus/qelPimBeXsecPar 188.97 1.2006 0.1851    0.626    2.504  -1.559   46.41   -0.633    1.874   0.0
+/boone/crosssections/pionminus/totPimAlXsecPar   0.8  0.9808 3.503   572.8    646.25   -4.473  -19.73
+/boone/crosssections/pionminus/inePimAlXsecPar 446.8  1.1888 0.305     0.706    1.685 997.8   -457.8     0.611  233.4     0.0
+/boone/crosssections/pionminus/qelPimAlXsecPar 129.12 1.1888 0.305     0.633    2.199  32.52    85.15   -1.225    1.383   0.0
+
+#
+# End of BooNE Cross section specifications
+#
+#######################################################################################
+#
+# Slope parameters for the QuasiElastic Model
+# The quasielastic model in new MC applies only to 8GeV protons on Be,
+# Parameters for neutrons, piplus and piminus that were used in old MC,
+# are set here but currently not used as QuasiElastic process is now included
+# and modeled within Inelastic process
+# These parameters specify the slope of the q^2 distribution as a function of momentum
+# in units of (GeV/c)^{-2}
+#
+# For nucleons, the parametrization is a polynomial: 
+#	c0 + c1*p + c2*p^2 + c3*p^3 + c4*p^4 + c5*p^5
+# For pions, the parameterization involves a Gaussian and a Threshold function
+#       c0 * tanh((p-c1)*c2) + c3 * Gauss(c4, c5) where c4 is the Gaussian mean, c5 is the Gaussian width
+
+/boone/physics/quasielastic/proQuasiElasticPar 5.20996 0.814526 -0.0376766 0.0        0.0        0.0
+/boone/physics/quasielastic/neuQuasiElasticPar 2.56793 2.87091  -0.535132  0.0429920 -0.00126008 0.0
+/boone/physics/quasielastic/pipQuasiElasticPar 4.09816 1.73419   1.15718   2.97006    1.52589    0.217029
+/boone/physics/quasielastic/pimQuasiElasticPar 4.16121 0.583495  1.21394   2.17844    1.07658   -0.0891735
+
+#
+# End of quasi elastic slope parameters
+#
+
+
+#######################################################################################
+
+# Specify the cross-section reweighting functions for particle production
+# in p-Be interactions.
+# This needs to be done before specifying the model for pBe->secondary
+#
+# First specify the type of functions to be used.
+# Options: NONE  - no reweighting function is used
+#          POLY  - reweighting is a polynomial function of the daughter's pz
+#          EXP   - reweighting is an exponential function of the daughter's pz
+#          FLAT1 - reweighting makes the daughter cross-section tables flat in 
+#                  p and theta
+#          FLAT2 - reweighting makes the daughter cross-section tables flat in 
+#                  pt and pz
+
+/boone/physics/protonRwgtFunc NONE
+/boone/physics/neutronRwgtFunc NONE
+/boone/physics/pionPlusRwgtFunc EXP
+/boone/physics/pionMinusRwgtFunc EXP
+/boone/physics/kaonPlusRwgtFunc EXP
+/boone/physics/kaonMinusRwgtFunc EXP
+/boone/physics/kaonZeroLongRwgtFunc EXP
+
+# Next specify the parameters of the chosen reweighting function
+# NONE:  rwgtXSec = xsec  (where xsec = the original unweighted cross-section)
+# POLY:  rwgtXSec = xsec * (c0 + c1*pz + c2*pz^2 + ... + c9*pz^9)  (pz in GeV)
+# EXP:   rwgtXSec = xsec * (c0 + c1*exp(c2*(pz-c3)))  (pz in GeV)
+# FLAT1: rwgtXSec = c0 * 2*Pi*pt/(p*p)
+# FLAT2: rwgtXSec = c0
+#
+# Note that when using FLAT1 and FLAT2 function types, c0 is assumed to
+#    have units of millibarn/(GeV*GeV)/(pz binwidth)/(pt binwidth)
+#    and millibarn/GeV/(p binwidth)/(theta binwidth)
+#
+# Usage:  /boone/physics/*RwgtParams c0 c1 c2 c3 c4 c5 c6 c7 c8 c9
+
+/boone/physics/protonRwgtParams 0.
+/boone/physics/neutronRwgtParams 0.
+/boone/physics/pionPlusRwgtParams 0. 1. 0.8517193 0.
+/boone/physics/pionMinusRwgtParams 0. 1. 0.8517193 0.
+/boone/physics/kaonPlusRwgtParams 0. 1.1 0.8006368 0.
+/boone/physics/kaonMinusRwgtParams 0. 1.1 0.8006368 0.
+/boone/physics/kaonZeroLongRwgtParams 0. 3. 0.8006368 0.
+# For exponentials, wgt of 1000 at pz=10 GeV requires c2=0.6907755
+#                   wgt of 3000 at pz=10 GeV requires c2=0.8006368
+#                   wgt of 5000 at pz=10 GeV requires c2=0.8517193
+
+
+#-------------------------------------------------------------------------
+#Specify energy range where BooNEpBeInteraction model is applicable
+/boone/physics/BooNEpBeModelEnergyRange 7.5 8.5
+#-------------------------------------------------------------------------
+# The following p-Be secondary particle production commands configure
+# BooNEpBeInteraction model
+#
+# pi+
+# Options: GFLUKA, MARS, ZGS, SWPar
+/boone/physics/SWPiPlusPar 220.7 1.080 1.000 1.978 1.32 5.572 0.08678 9.686
+/boone/physics/piPlusModel SWPar
+# pi-
+# Options: GFLUKA, MARS, ZGS, SWPar
+#following parameters reproduce the multiplicity table in MB flux paper (Table X) 
+#and were used to generate neutrino mode histograms (april07_baseline) - 
+#however later in EventWeight these are reweighted to the other set provided below
+#/boone/physics/SWPiMinusPar 237.2 0.8986 4.521 1.154 1.105 4.224 0.06613 9.961 
+#following parameters are in MB flux paper Table VI. These were used to generate 
+#MiniBooNE anti-neutrino flux histograms (december2007_baseline) and for neutrino 
+#mode analysis using subsequent reweighting as mentioned abouve
+/boone/physics/SWPiMinusPar 213.66 0.93785 5.4537 1.2096 1.2836 4.7807 0.073383 8.3294
+/boone/physics/piMinusModel SWPar
+# K+
+# Options: GFLUKA, MARS, SWPar
+/boone/physics/SWKaonPlusPar 6.083 1.468 10.04 3.086 3.356 5.718 0.1274 10.36 0.0
+/boone/physics/FSKaonPlusPar 11.70 0.88 4.77 1.51 2.21 2.17 1.51 0.0
+/boone/physics/kaonPlusModel FScal
+# K-
+# Options: GFLUKA, MARS
+/boone/physics/kaonMinusModel MARS
+# K0L
+# Options: GFLUKA, MARS, SWPar
+/boone/physics/SWKaonZeroLongPar 15.13 1.975 4.084 0.9277 0.7306 4.362 0.04789 13.3 1.278
+/boone/physics/FSKaonZeroLongPar 11.70 0.88 4.77 1.51 2.21 2.17 1.51 0.0
+/boone/physics/kaonZeroLongModel SWPar
+# Secondary protons
+# Options: GFLUKA, MARS
+/boone/physics/protonModel MARS
+# neutrons
+# Options: GFLUKA, MARS
+/boone/physics/neutronModel MARS
+
+
+#
+# define horn current
+# This command must be issued after the "/run/initialize" command.
+# You should specify a valid G4 unit for the electric current (e.g. ampere).
+#
+/boone/field/horncurrent 174000. A
+#
+# set skin depth options
+#
+/boone/field/skin/SkinDepth 1.4 mm
+/boone/field/skin/SkinDepthModel EXPI
+/boone/field/skin/SkinDepthHornCurrent 174000. A
+
+# /boone/step/ commands
+# -------------------------
+# http://www-boone.fnal.gov/software_and_analysis/beam_group/software/links/geant4/doc/_boone_step_.html
+/boone/step/perfectFocusingForPositives 0
+/boone/step/perfectFocusingForNegatives 0
+
+# /boone/primary/ commands
+# ------------------------
+# http://www-boone.fnal.gov/software_and_analysis/beam_group/software/links/geant4/doc/_boone_primary_.html
+# Omittable: specify primary beam transverse mean position and spread,
+# mean direction and spread, and z position of primary particles at birth.
+# You should specify valid G4 units for lengths (-> mean position, position
+# spread, and z position) and angles (-> mean direction and spread).
+# For a list of all available G4 units, see URL above.
+/boone/primary/mean_x 0. mm
+/boone/primary/mean_y 0. mm
+/boone/primary/sigma_x 1.51 mm
+/boone/primary/sigma_y 0.75 mm
+/boone/primary/mean_thetax 0. mrad
+/boone/primary/mean_thetay 0. mrad
+/boone/primary/sigma_thetax 0.66 mrad
+/boone/primary/sigma_thetay 0.4 mrad
+/boone/primary/zPosition -1. cm
+/boone/primary/corr_xthetax -1
+/boone/primary/corr_ythetay -1
+
+#
+# set root output file name
+# 
+/boone/output/filename REPLACE_OUTPUT_FILENAME
+
+#/boone/output/saveProductionNtuple true
+# define aux ntuples
+# particles exiting exitVolName and entering enterVolName will be recorded in treeName tree
+# /boone/output/boundaryNtuple treeName exitVolName enterVolName
+#/boone/output/boundaryNtuple horn HDSK PICV 
+#/boone/output/boundaryNtuple collimator CDSK CVFD 
+
+#
+# set thresholds for recording neutrinos
+#
+/boone/output/nuEnergyThr 0. MeV
+/boone/output/nuEnergyUpperThr -1. MeV
+/boone/output/pionMomentumThr -1. MeV
+/boone/output/muonMomentumThr -1. MeV
+/boone/output/kaonMomentumThr -1. MeV
+#
+# set verbosities
+#
+/boone/physics/verbose 0
+/control/verbose 0
+/process/verbose 0
+/tracking/verbose 0
+/event/verbose 0
+/run/verbose 1
+/control/saveHistory 
+/event/printModulo 10
+/event/progressbar true
+
+# Start simulation
+# ----------------
+# Specify number of protons on target
+/run/beamOn REPLACE_NPOT
+
+# Termination
+# -----------
+exit

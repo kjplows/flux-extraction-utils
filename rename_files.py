@@ -4,7 +4,7 @@ from collections import defaultdict
 
 groups = defaultdict(list)
 
-directory = Path("/pnfs/sbnd/scratch/users/kplows/analyse_beammc_voxels_500files_00/work-products")
+directory = Path("/pnfs/sbnd/scratch/users/kplows/analyse_beammc_voxels/analyse_beammc_voxels_500files_newVolume_03/work-products")
 
 for path in directory.glob("*.json"):
     with path.open() as f:

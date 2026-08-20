@@ -18,19 +18,23 @@ The second step consists of running the produced DAG file.
 This script handles the first step. Arguments:
 
  ${b0} 
-       -T | --top         Top level directory to write output files to.
-	    --f0          Index of first dk2nu file to run.
-	    --f1          Index of last  dk2nu file to run.
-       -b | --banalyser   Path to beamHist Python analyser script.
-            --x1          Lower end of the x positions. (cm)
-            --x2          Upper end of the x positions.
-	    --y1
-	    --y2          As in x.
-	    --size        Half side of the square detector. (cm)
-	    --z1
-	    --z2          As in x.
-	    --dz          As in x.
-	    --rewrite     Whether to rewrite top level directory.
+       -T  | --top       Top level directory.
+       -n  | --nfiles    N files per job.
+       -l  | --list      List of input files to use
+        -b | --banalyser Python analysis script.
+	     --x1        Start x (detector coords, cm)
+	     --x2        End x   (detector coords, cm)
+	     -dx         x step
+	     --y1        As in x
+	     --y2
+	     --dy
+	     --size      Detector half size (cm)
+	     --z1        As in x
+	     --z2        
+      	     --dz
+ 	     --f0	 First file index (1-indexed)
+ 	     --f1        Last file index
+	     --rewrite   Rewrite the top level directory?
 
 Use "${b0} -h" to show this help message.
 EOF

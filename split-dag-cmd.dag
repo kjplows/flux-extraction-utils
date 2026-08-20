@@ -1,0 +1,1 @@
+nIgnore=1 ; for i in $(seq 0 21) ; do echo "<parallel>" > dags/g4bnb-extract-${i}.dag ; cat /pnfs/sbnd/scratch/users/kplows/analyse_beammc_voxels/analyse_beammc_voxels_500files_03/cfg/g4bnb-extract.dag | head -n $(echo "${nIgnore}+88" | bc) | tail -n 88 >> dags/g4bnb-extract-${i}.dag ; echo "</parallel>" >> dags/g4bnb-extract-${i}.dag ; nIgnore=$(echo "${nIgnore}"+88 | bc) ; done

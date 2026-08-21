@@ -12,37 +12,7 @@ from scipy.linalg import solve
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 from itertools import product
-
-# A wrapper around uproot.writing.identify.to_TH1x
-# note that to_TH1x expects first and last bin under/overflow
-def construct_uproot_hist(data, bins=None, entries=None, sumw2s=None, name=None, title=None, axis_titles=None):
-
-    uname="foo" if name is None else name
-    uentries = 0 if entries is None else entries
-    xcentres = 0.5 * (bins[1:] + bins[:-1])
-    '''
-    xcentres = np.concat([ [bins[0] - 0.5 * np.diff(bins)[0]],
-                           xcentres,
-                           [bins[-1] + 0.5 * np.diff(bins)[0]] ])
-    '''
-    
-    return to_TH1x(
-        fName    = uname,
-        fTitle   = title,
-        data     = np.concat([[0.0], data, [0.0]]),
-        fEntries = uentries,
-        fSumw2   = np.concat([[0.0], sumw2s, [0.0]]),
-        fTsumw   = np.sum(data),
-        fTsumw2  = np.sum(sumw2s),
-        fXaxis   = to_TAxis(fName  = "xaxis",   fTitle = axis_titles[0],
-                            fNbins = data.shape[0],
-                            fXmin  = bins[0], fXmax  = bins[-1]),
-        fYaxis   = to_TAxis(fName  = "yaxis",   fTitle = axis_titles[1],
-                            fNbins = 1,
-                            fXmin  = max(0.0, 0.95 * np.min(data)), fXmax = 1.05 * np.max(data)),
-        fTsumwx  = np.sum(data * xcentres),
-        fTsumwx2 = np.sum(data * xcentres ** 2)
-    )
+from math import comb
 
 flavours = ["numu", "numubar", "nue", "nuebar"]
 parents = ["pion", "kaon", "kzero", "muon"]
@@ -55,8 +25,7 @@ def main(args):
 
     print(Fore.GREEN + "Interpolating from " + str(len(files)) + " files..." + Fore.RESET)
 
-    # For now, let's pick the 800 MeV bin == value 16
-    # Run the interpolant over all three directions simultaneously]
+    # Run the interpolant over all three directions simultaneously
     with uproot.open(files[0]) as fuin:
         znames = sorted(set([f.split('/')[0].split(';')[0] for f in fuin.keys()]))
         ebins = fuin[znames[0]]["numu"]["Flux"].axis('x').edges()
@@ -88,48 +57,82 @@ def main(args):
         for iz, z in enumerate(zpos):
             coordinates[ix, iy, iz] = np.array([x, y, z])
 
-    poly = PolynomialFeatures(degree=4)
-    design_matrix = poly.fit_transform(coordinates.reshape(len(xpos)*len(ypos)*len(zpos), 3))
-    # shape: ( NX*NY*NZ, comb(3+deg, deg) ) = (12584, 35) for 3 parameters, deg = 4,
-    # NX = NY = 22, NZ = 26
+    # For every bin in the flux, get the map of fractional deviations (relative to error)
+    data   = np.zeros( (len(ebins[:5]), len(xpos), len(ypos), len(zpos)) )
+    errors = np.zeros_like( data )
+    ypred  = np.zeros_like( data )
+    frac_devs  = np.zeros_like( data )
+    frac_preds = np.zeros_like( data )
+    coeffs = np.zeros( (data.shape[0], comb(3 + args.degree, args.degree)) ) # To save coefficients
+    powers = None # To save representations of powers
+    with tqdm(total = data.shape[0], desc="Fitting bins...",
+              bar_format = Fore.RED + "{l_bar}{bar}{r_bar}" + Fore.RESET) as pbar:
+        for ibin in range(data.shape[0]):
+            poly = PolynomialFeatures(degree=args.degree)
+            design_matrix = poly.fit_transform(coordinates.reshape(len(xpos)*len(ypos)*len(zpos), 3))
+            # shape: ( NX*NY*NZ, comb(3+deg, deg) ) = (12584, 35) for 3 parameters, deg = 4,
+            # NX = NY = 22, NZ = 26
 
-    # Load in data: go from structured array to flat one
-    print(Fore.MAGENTA + "Filling data..." + Fore.RESET)
-    data = np.empty( (len(xpos), len(ypos), len(zpos)), dtype=np.float64 )
-    for ix in range(len(xpos)):
-        for iy in range(len(ypos)):
-            with uproot.open(files[indices[ix, iy]]) as fuin:
-                for iz, z in enumerate(znames):
-                    area  = fuin[z]["hArea"].axis('x').centers()[0]
-                    POT   = fuin[z]["hPOT"].axis('x').centers()[0]
-                    scval = fuin[z]["numu"]["Flux"].values()[16] / (bw*area*POT)
-                    data[ix, iy, iz] = scval
+            if powers is None:
+                powers = np.empty( comb(3 + args.degree, args.degree), dtype=object )
+                terms = poly.get_feature_names_out(['x', 'y', 'z'])
+                for i in range(len(terms)):
+                    powers[i] = terms[i]
 
-    # Flatten.
-    data = data.reshape( len(xpos)*len(ypos)*len(zpos) )
+            # Load in data: go from structured array to flat one
+            
+            for ix in range(len(xpos)):
+                for iy in range(len(ypos)):
+                    with uproot.open(files[indices[ix, iy]]) as fuin:
+                        for iz, z in enumerate(znames):
+                            area  = fuin[z]["hArea"].axis('x').centers()[0]
+                            POT   = fuin[z]["hPOT"].axis('x').centers()[0]
+                            scval = fuin[z][args.flavour]["Flux"].values()[ibin] / (bw*area*POT)
+                            erval = fuin[z][args.flavour]["Flux"].errors()[ibin] / (bw*area*POT)
+                            data[ibin, ix, iy, iz]   = scval
+                            errors[ibin, ix, iy, iz] = erval
 
-    # Fit the data.
-    print(Fore.MAGENTA + "Fitting model to data..." + Fore.RESET)
-    model = LinearRegression()
-    model.fit(design_matrix, data)
+            # Flatten.
+            nudata = data[ibin, ...].reshape( len(xpos)*len(ypos)*len(zpos) )
+            #errors = errors.reshape( len(xpos)*len(ypos)*len(zpos) )
+            errors[ibin, ...][errors[ibin, ...]==0.0] = 1.0 # No data, no deviation
 
-    # Get the prediction
-    print(Fore.MAGENTA + "Predicting..." + Fore.RESET)
-    ypred = model.predict(design_matrix) # shape: (NX*NY*NZ), might need the intercept added
-    ypred = ypred.reshape( (len(xpos), len(ypos), len(zpos)) )
+            # Fit the data.
+            model = LinearRegression()
+            model.fit(design_matrix, nudata)
+
+            # Get the prediction
+            nuypred = model.predict(design_matrix) # shape: (NX*NY*NZ)
+
+            # Reshape back to structured
+            nudata  =  nudata.reshape( (len(xpos), len(ypos), len(zpos)) )
+            nuypred = nuypred.reshape( (len(xpos), len(ypos), len(zpos)) )
+            ypred[ibin, ...] = nuypred
     
-    mco = model.coef_ # shape: comb(3+deg, deg)
-    icp = model.intercept_ # scalar
+            mco = model.coef_ # shape: comb(3+deg, deg)
+            icp = model.intercept_ # scalar that needs to be added to mco[0]
 
-    data = data.reshape( (len(xpos), len(ypos), len(zpos)) )
+            coeffs[ibin, 0] = mco[0] + icp # include the intercept!
+            coeffs[ibin, 1:] = mco[1:]
+
+            pbar.update(1)
+
+    # Now, calculate the fractional deviations
+    with np.errstate(divide='ignore', invalid='ignore'):
+        frac_devs = np.abs((data - ypred)/data)
+        frac_devs = np.abs((data - ypred)/ypred)
+
     with h5py.File(Path(args.output).resolve(), 'w') as fhout:
-        fhout.create_dataset("Coordinates-x", data=coordinates[...,0])
-        fhout.create_dataset("Coordinates-y", data=coordinates[...,1])
-        fhout.create_dataset("Coordinates-z", data=coordinates[...,2])
-        fhout.create_dataset("Data", data=data)
-        fhout.create_dataset("Prediction", data=ypred)
-        fhout.create_dataset("Deviation", data=data-ypred)
-        fhout.create_dataset("Fractional deviation", data=(data-ypred)/data)
+        fhout.create_dataset("Energy bins", data=ebins)
+        fhout.create_dataset("Term expansion", data=powers)
+        
+        gflav = fhout.require_group(args.flavour)
+        gflav.create_dataset("Data", data=data)
+        gflav.create_dataset("Prediction", data=ypred)
+        gflav.create_dataset("Deviation", data=data-ypred)
+        gflav.create_dataset("Fractional deviation (over obs)", data=frac_devs)
+        gflav.create_dataset("Fractional deviation (over pred)", data=frac_preds)
+        gflav.create_dataset("Model coefficients", data=coeffs)
 
     print(Fore.GREEN + "Saved file to " + str(Path(args.output).resolve()) + Fore.RESET)
 
@@ -139,6 +142,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='''On every histogram, read in x and y, get the density out, and interpolate that.''')
     parser.add_argument('-i', '--input', type=str, required=True, help="Input directory. I will use all the files in this dir.")
     parser.add_argument('-o', '--output', type=str, default='interpolated.h5', help="Output HDF5 file.")
+    parser.add_argument('-d', '--degree', type=int, default=4, help='Polynomial degree.')
+    parser.add_argument('--flavour', type=str, default='numu',
+                        choices=['numu', 'nue', 'numubar', 'nuebar'], help="Which flux to interpolate.")
     args = parser.parse_args()
 
     main(args)

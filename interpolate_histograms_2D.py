@@ -9,7 +9,7 @@ from collections import defaultdict
 from colorama import Fore
 from tqdm import tqdm
 from itertools import product
-from scipy.interpolate import RectBivariateSpline
+from scipy.interpolate import RectBivariateSpline, RegularGridInterpolator
 
 flavours = ["numu", "numubar", "nue", "nuebar"]
 parents = ["pion", "kaon", "kzero", "muon"]
@@ -88,19 +88,18 @@ def main(args):
 
     # For every bin in the flux, get the map of fractional deviations (relative to error)
     # Cutoff at 7 GeV --> bin 140
-    cutoff = int(1.5 / bw)
+    cutoff = int(5.0 / bw)
     data   = np.zeros( (len(ebins[:cutoff]), len(xpos), len(ypos)) )
     errors = np.zeros_like( data )
 
     # How do we estimate systematic uncertainty?
-    # Add in quadrature two fractional quantities:
-    #
-    # 1. residual from actually simulated points (if a validation dataset is present)
-    # 2. estimation of "wiggle" in each cell (evaluating the spline densely)
-    ypred  = np.zeros_like( data ) # to hold spline predictions at the spline points
+    # Compare spline to simulated validation data.
+    # Do the same for a bilinear interpolation and keep the spline <-> bilinear agreement as a diagnostic
+    ypred  = np.zeros_like( data ) # to hold spline predictions at the voxel points
     val_data = np.zeros( (len(ebins[:cutoff]), len(val_xpos), len(val_ypos)) ) \
         if args.validation is not None else None
     val_pred = np.zeros_like(val_data) if args.validation is not None else None
+    val_bil_pred = np.zeros_like(val_data) if args.validation is not None else None
     frac_wig = np.zeros( (len(ebins[:cutoff]), len(xpos)-1, len(ypos)-1) )
     
     with tqdm(total = data.shape[0], desc="Fitting bins...",
@@ -122,14 +121,21 @@ def main(args):
             spline = RectBivariateSpline( xpos, ypos, data[ibin, ...], kx=3, ky=3, s=0 )
             ypred[ibin] = spline(xpos, ypos)
 
+            bilinear = RegularGridInterpolator( (xpos, ypos), data[ibin, ...], method="linear" )
+
+            # Evaluate the agreement behind bilinear interpolation (a "mesh") and spline interpolation
+            # densely inside a grid, and take the maximum difference as a "wiggle" systematic
             for ix in range(len(xpos)-1):
                 for iy in range(len(ypos)-1):
 
                     xlocal = np.linspace(xpos[ix], xpos[ix+1], num=100)
                     ylocal = np.linspace(ypos[iy], ypos[iy+1], num=100)
                     cell_spline = spline(xlocal, ylocal)
+                    VCX, VCY = np.meshgrid(xlocal, ylocal, indexing='ij')
+                    VCP = np.column_stack( (VCX.ravel(), VCY.ravel()) )
+                    cell_bilinear = bilinear(VCP).reshape(VCX.shape)
 
-                    dphi = cell_spline.max() - cell_spline.min()
+                    dphi = np.nanmax(np.abs(cell_spline - cell_bilinear))
                     xc, yc = np.array([0.5 * (xpos[ix] + xpos[ix+1])]), \
                         np.array([0.5 * (ypos[iy] + ypos[iy+1])])
                     spred = spline( xc, yc )[0,0]
@@ -145,13 +151,18 @@ def main(args):
                             scval = fuin[znames[0]][args.flavour]["Flux"].values()[ibin] / (bw*area*POT)
                             val_data[ibin, ix, iy]   = scval
                 val_pred[ibin] = spline( val_xpos, val_ypos )
+                VX, VY = np.meshgrid(val_xpos, val_ypos, indexing='ij')
+                VP = np.column_stack( (VX.ravel(), VY.ravel()) )
+                val_bil_pred[ibin] = bilinear(VP).reshape(VX.shape)
             
             pbar.update(1)
 
     # If we have a validation set, make the comparison
     val_dev = val_data - val_pred if args.validation is not None else None
+    val_bil_dev = val_data - val_bil_pred if args.validation is not None else None
     with np.errstate(divide='ignore', invalid='ignore'):
         val_frac_dev = val_dev / val_data if args.validation is not None else None
+        val_bil_frac_dev = val_bil_dev / val_data if args.validation is not None else None
 
     with h5py.File(Path(args.output).resolve(), 'w') as fhout:
         fhout.create_dataset("Energy bins", data=ebins[:cutoff])
@@ -159,10 +170,11 @@ def main(args):
         gflav = fhout.require_group(args.flavour)
         gflav.create_dataset("Data", data=data)
         gflav.create_dataset("Prediction", data=ypred)
-        gflav.create_dataset("In-cell fractional flux variation", data=frac_wig)
         if args.validation is not None:
             gflav.create_dataset("Validation data", data=val_data)
-            gflav.create_dataset("Fractional deviation", data=val_frac_dev)
+            gflav.create_dataset("Fractional deviation (spline)", data=val_frac_dev)
+            gflav.create_dataset("Fractional deviation (bilinear)", data=val_bil_frac_dev)
+            gflav.create_dataset("Wiggle systematic", data=frac_wig)
 
     print(Fore.GREEN + "Saved file to " + str(Path(args.output).resolve()) + Fore.RESET)
 

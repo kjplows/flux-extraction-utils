@@ -170,6 +170,8 @@ def main(args):
 
     with h5py.File(Path(args.output).resolve(), 'w') as fhout:
         fhout.create_dataset("Energy bins", data=ebins[:cutoff])
+        fhout.create_dataset("x coordinates", data=xpos)
+        fhout.create_dataset("y coordinates", data=ypos)
         
         gflav = fhout.require_group(args.flavour)
         gflav.create_dataset("Data", data=data)

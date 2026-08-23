@@ -88,7 +88,7 @@ def main(args):
 
     # For every bin in the flux, get the map of fractional deviations (relative to error)
     # Cutoff at 7 GeV --> bin 140
-    cutoff = int(5.0 / bw)
+    cutoff = int(7.0 / bw)
     data   = np.zeros( (len(ebins[:cutoff]), len(xpos), len(ypos)) )
     errors = np.zeros_like( data )
 
@@ -97,6 +97,8 @@ def main(args):
     # Do the same for a bilinear interpolation and keep the spline <-> bilinear agreement as a diagnostic
     ypred  = np.zeros_like( data ) # to hold spline predictions at the voxel points
     val_data = np.zeros( (len(ebins[:cutoff]), len(val_xpos), len(val_ypos)) ) \
+        if args.validation is not None else None
+    val_errors = np.zeros( (len(ebins[:cutoff]), len(val_xpos), len(val_ypos)) ) \
         if args.validation is not None else None
     val_pred = np.zeros_like(val_data) if args.validation is not None else None
     val_bil_pred = np.zeros_like(val_data) if args.validation is not None else None
@@ -149,7 +151,9 @@ def main(args):
                             area  = fuin[znames[0]]["hArea"].axis('x').centers()[0]
                             POT   = fuin[znames[0]]["hPOT"].axis('x').centers()[0]
                             scval = fuin[znames[0]][args.flavour]["Flux"].values()[ibin] / (bw*area*POT)
-                            val_data[ibin, ix, iy]   = scval
+                            erval = fuin[znames[0]][args.flavour]["Flux"].errors()[ibin] / (bw*area*POT)
+                            val_data[ibin, ix, iy]     = scval
+                            val_errors[ibin, ix, iy]   = erval
                 val_pred[ibin] = spline( val_xpos, val_ypos )
                 VX, VY = np.meshgrid(val_xpos, val_ypos, indexing='ij')
                 VP = np.column_stack( (VX.ravel(), VY.ravel()) )
@@ -169,9 +173,13 @@ def main(args):
         
         gflav = fhout.require_group(args.flavour)
         gflav.create_dataset("Data", data=data)
+        gflav.create_dataset("Errors on data", data=errors)
         gflav.create_dataset("Prediction", data=ypred)
         if args.validation is not None:
             gflav.create_dataset("Validation data", data=val_data)
+            gflav.create_dataset("Errors on validation data", data=val_errors)
+            gflav.create_dataset("Validation prediction (spline)", data=val_pred)
+            gflav.create_dataset("Validation prediction (bilinear)", data=val_bil_pred)
             gflav.create_dataset("Fractional deviation (spline)", data=val_frac_dev)
             gflav.create_dataset("Fractional deviation (bilinear)", data=val_bil_frac_dev)
             gflav.create_dataset("Wiggle systematic", data=frac_wig)

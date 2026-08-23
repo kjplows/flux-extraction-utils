@@ -3,6 +3,7 @@ import h5py
 import matplotlib.pyplot as plt
 from pathlib import Path
 from datetime import datetime
+import argparse
 
 from scipy.interpolate import RectBivariateSpline
 from matplotlib.widgets import Slider, TextBox, Button
@@ -42,8 +43,14 @@ def construct_uproot_hist(data, bins=None, entries=None, sumw2s=None, name=None,
 # Configuration
 # ============================================================
 
-H5FILE = Path("hdf5s/numu-interpolated-2D.h5").resolve()
-FLAVOUR = "numu"
+parser = argparse.ArgumentParser(description='''I am an interactive display of the SBND flux. Just vgive me a file to grab the splines from.''')
+parser.add_argument('-i', '--input', type=str, required=True, help="Input HDF5")
+parser.add_argument('-f', '--flavour', type=str, default='numu',
+                    choices=['numu', 'nue', 'numubar', 'nuebar'], help="Which flux to interpolate.")
+args = parser.parse_args()
+
+H5FILE = Path(args.input).resolve()
+FLAVOUR = args.flavour
 
 
 # ============================================================

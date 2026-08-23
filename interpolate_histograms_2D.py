@@ -29,7 +29,7 @@ def main(args):
     # Get binning and z information
     with uproot.open(files[0]) as fuin:
         znames = sorted(set([f.split('/')[0].split(';')[0] for f in fuin.keys()]))
-        ebins = fuin[znames[0]]["numu"]["Flux"].axis('x').edges()
+        ebins = fuin[znames[args.zpoint]]["numu"]["Flux"].axis('x').edges()
         bc = 0.5 * (ebins[1:] + ebins[:-1])
         bw = np.diff(ebins)[0]
 
@@ -40,8 +40,8 @@ def main(args):
     
     for f in files:
         with uproot.open(f) as fuin:
-            xlist.append(fuin[znames[0]]['x'].axis('x').centers()[0] - 73.78) # correct for beam->det
-            ylist.append(fuin[znames[0]]['y'].axis('x').centers()[0])
+            xlist.append(fuin[znames[args.zpoint]]['x'].axis('x').centers()[0] - 73.78) # correct for beam->det
+            ylist.append(fuin[znames[args.zpoint]]['y'].axis('x').centers()[0])
     xpos, val_xpos = sorted(set(xlist)), None
     ypos, val_ypos = sorted(set(ylist)), None
     xdense = np.linspace(xpos[0], xpos[-1], num=100*len(xpos))
@@ -52,8 +52,8 @@ def main(args):
         for f in val_files:
             with uproot.open(f) as fuin:
                 val_xlist.append(
-                    fuin[znames[0]]['x'].axis('x').centers()[0] - 73.78) # correct for beam->det
-                val_ylist.append(fuin[znames[0]]['y'].axis('x').centers()[0])
+                    fuin[znames[args.zpoint]]['x'].axis('x').centers()[0] - 73.78) # correct for beam->det
+                val_ylist.append(fuin[znames[args.zpoint]]['y'].axis('x').centers()[0])
 
         val_xpos, val_ypos = sorted(set(val_xlist)), sorted(set(val_ylist))
 
@@ -113,10 +113,10 @@ def main(args):
             for ix in range(len(xpos)):
                 for iy in range(len(ypos)):
                     with uproot.open(files[indices[ix, iy]]) as fuin:
-                        area  = fuin[znames[0]]["hArea"].axis('x').centers()[0]
-                        POT   = fuin[znames[0]]["hPOT"].axis('x').centers()[0]
-                        scval = fuin[znames[0]][args.flavour]["Flux"].values()[ibin] / (bw*area*POT)
-                        erval = fuin[znames[0]][args.flavour]["Flux"].errors()[ibin] / (bw*area*POT)
+                        area  = fuin[znames[args.zpoint]]["hArea"].axis('x').centers()[0]
+                        POT   = fuin[znames[args.zpoint]]["hPOT"].axis('x').centers()[0]
+                        scval = fuin[znames[args.zpoint]][args.flavour]["Flux"].values()[ibin] / (bw*area*POT)
+                        erval = fuin[znames[args.zpoint]][args.flavour]["Flux"].errors()[ibin] / (bw*area*POT)
                         data[ibin, ix, iy]   = scval
                         errors[ibin, ix, iy] = erval
 
@@ -148,10 +148,10 @@ def main(args):
                 for ix in range(len(val_xpos)):
                     for iy in range(len(val_ypos)):
                         with uproot.open(val_files[val_indices[ix, iy]]) as fuin:
-                            area  = fuin[znames[0]]["hArea"].axis('x').centers()[0]
-                            POT   = fuin[znames[0]]["hPOT"].axis('x').centers()[0]
-                            scval = fuin[znames[0]][args.flavour]["Flux"].values()[ibin] / (bw*area*POT)
-                            erval = fuin[znames[0]][args.flavour]["Flux"].errors()[ibin] / (bw*area*POT)
+                            area  = fuin[znames[args.zpoint]]["hArea"].axis('x').centers()[0]
+                            POT   = fuin[znames[args.zpoint]]["hPOT"].axis('x').centers()[0]
+                            scval = fuin[znames[args.zpoint]][args.flavour]["Flux"].values()[ibin] / (bw*area*POT)
+                            erval = fuin[znames[args.zpoint]][args.flavour]["Flux"].errors()[ibin] / (bw*area*POT)
                             val_data[ibin, ix, iy]     = scval
                             val_errors[ibin, ix, iy]   = erval
                 val_pred[ibin] = spline( val_xpos, val_ypos )
@@ -195,6 +195,7 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--output', type=str, default='interpolated.h5', help="Output HDF5 file.")
     parser.add_argument('--flavour', type=str, default='numu',
                         choices=['numu', 'nue', 'numubar', 'nuebar'], help="Which flux to interpolate.")
+    parser.add_argument('-z', '--zpoint', type=int, default=0, help="Which z point to interpolate.")
     args = parser.parse_args()
 
     main(args)

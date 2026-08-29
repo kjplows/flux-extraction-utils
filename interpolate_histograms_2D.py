@@ -12,6 +12,7 @@ from itertools import product
 from scipy.interpolate import RectBivariateSpline, RegularGridInterpolator
 
 flavours = ["numu", "numubar", "nue", "nuebar"]
+cutoffs = {'numu':7.0, 'numubar':4.0, 'nue':5.0, 'nuebar':5.0}
 parents = ["pion", "kaon", "kzero", "muon"]
 secondaries = ["pimu", "pinomu", "kaon", "kzero", "nucleon"]
 sec_titles  = ["pion->...->muon", "pion->...->(not-muon)",
@@ -29,7 +30,7 @@ def main(args):
     # Get binning and z information
     with uproot.open(files[0]) as fuin:
         znames = sorted(set([f.split('/')[0].split(';')[0] for f in fuin.keys()]))
-        ebins = fuin[znames[args.zpoint]]["numu"]["Flux"].axis('x').edges()
+        ebins = fuin[znames[args.zpoint]][args.flavour]["Flux"].axis('x').edges()
         bc = 0.5 * (ebins[1:] + ebins[:-1])
         bw = np.diff(ebins)[0]
 
@@ -38,7 +39,7 @@ def main(args):
     xlist, ylist = [], []
     val_xlist, val_ylist = [], []
     
-    for f in files:
+    for f in tqdm(files, desc="listifying"):
         with uproot.open(f) as fuin:
             xlist.append(fuin[znames[args.zpoint]]['x'].axis('x').centers()[0] - 73.78) # correct for beam->det
             ylist.append(fuin[znames[args.zpoint]]['y'].axis('x').centers()[0])
@@ -49,7 +50,7 @@ def main(args):
     xw, yw = 0.5 * np.diff(xpos)[0], 0.5 * np.diff(ypos)[0]
 
     if args.validation is not None:
-        for f in val_files:
+        for f in tqdm(val_files, desc="more listifying"):
             with uproot.open(f) as fuin:
                 val_xlist.append(
                     fuin[znames[args.zpoint]]['x'].axis('x').centers()[0] - 73.78) # correct for beam->det
@@ -88,7 +89,7 @@ def main(args):
 
     # For every bin in the flux, get the map of fractional deviations (relative to error)
     # Cutoff at 7 GeV --> bin 140
-    cutoff = int(7.0 / bw)
+    cutoff = int(cutoffs[args.flavour] / bw)
     data   = np.zeros( (len(ebins[:cutoff]), len(xpos), len(ypos)) )
     errors = np.zeros_like( data )
 

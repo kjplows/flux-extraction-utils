@@ -58,7 +58,7 @@ def main(args):
             coordinates[ix, iy, iz] = np.array([x, y, z])
 
     # For every bin in the flux, get the map of fractional deviations (relative to error)
-    data   = np.zeros( (len(ebins[:5]), len(xpos), len(ypos), len(zpos)) )
+    data   = np.zeros( (len(ebins[:60]), len(xpos), len(ypos), len(zpos)) )
     errors = np.zeros_like( data )
     ypred  = np.zeros_like( data )
     frac_devs  = np.zeros_like( data )

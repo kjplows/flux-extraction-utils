@@ -12,7 +12,7 @@ import uproot
 from uproot.writing.identify import to_TH1x, to_TAxis
 
 cutoffs = {
-    'numu': 139,
+    'numu': 100,
     'numubar': 60,
     'nue': 80,
     'nuebar': 80
@@ -100,24 +100,6 @@ parser.add_argument(
     help="Which flux to interpolate.",
 )
 
-parser.add_argument(
-    "--no-muon-pol",
-    action="store_true",
-    help=(
-        "Do not apply the muon polarisation correction. "
-        "By default the ratio stored in the HDF5 ('Muon polarisation ratio') is applied."
-    ),
-)
-
-parser.add_argument(
-    "--no-ratio-error",
-    action="store_false",
-    help=(
-        "Apply the muon polarisation ratio but do NOT add its statistical error "
-        "to the systematic band."
-    ),
-)
-
 args = parser.parse_args()
 
 H5FILE = Path(args.input).resolve()
@@ -168,65 +150,6 @@ with h5py.File(H5FILE, "r") as fhin:
         )
 
     # --------------------------------------------------------
-    # Muon polarisation
-    #
-    # The prediction was built without muon polarisation. The HDF5
-    # carries the ratio (with / without) at the front (z = 0) and back
-    # (z = 500 cm) faces, per energy bin. Interpolate it linearly in z
-    # to every z slice and multiply the prediction slice by it, so the
-    # correction is applied voxel by voxel, before any x-y spline is
-    # built or any integral is taken.
-    #
-    # The statistical error on the ratio goes into frac_syst below.
-    # --------------------------------------------------------
-
-    pol_frac_err = None
-
-    if not args.no_muon_pol:
-
-        needed = ["Muon polarisation ratio", "Muon polarisation ratio error"]
-        missing = [k for k in needed if k not in fhin[FLAVOUR]]
-        if missing or "Muon polarisation z coordinates" not in fhin:
-            raise KeyError(
-                f"{H5FILE.name} has no muon polarisation ratio for {FLAVOUR} "
-                f"(missing: {missing}). Use the *_muonPol.h5 file, or pass --no-muon-pol."
-            )
-
-        pol_ratio = fhin[FLAVOUR]["Muon polarisation ratio"][:]        # (E, 2)
-        pol_err = fhin[FLAVOUR]["Muon polarisation ratio error"][:]    # (E, 2)
-        pol_z = fhin["Muon polarisation z coordinates"][:]             # (2,)
-
-        if pol_ratio.shape != (pred.shape[0], 2):
-            raise ValueError(
-                f"Muon polarisation ratio has shape {pol_ratio.shape}, "
-                f"expected ({pred.shape[0]}, 2)."
-            )
-
-        tol = 1e-6
-        if zpos[0] < pol_z[0] - tol or zpos[-1] > pol_z[1] + tol:
-            raise ValueError(
-                f"z grid [{zpos[0]}, {zpos[-1]}] lies outside the range "
-                f"[{pol_z[0]}, {pol_z[1]}] where the muon polarisation ratio is known."
-            )
-
-        # Linear interpolation in z, weight t goes 0 -> 1 from front to back.
-        tz = (zpos - pol_z[0]) / (pol_z[1] - pol_z[0])                 # (Nz,)
-
-        ratio_z = (
-            pol_ratio[:, 0:1] * (1.0 - tz)[None, :]
-            + pol_ratio[:, 1:2] * tz[None, :]
-        )                                                              # (E, Nz)
-        err_z = (
-            pol_err[:, 0:1] * (1.0 - tz)[None, :]
-            + pol_err[:, 1:2] * tz[None, :]
-        )                                                              # (E, Nz)
-
-        pred = pred * ratio_z[:, None, None, :]
-
-        # Fractional error on the ratio, worst case over z, per energy bin.
-        pol_frac_err = np.max(err_z / ratio_z, axis=1)                 # (E,)
-
-    # --------------------------------------------------------
     # Systematic
     #
     # Combine residual + wiggle in quadrature and take the
@@ -247,18 +170,8 @@ with h5py.File(H5FILE, "r") as fhin:
         axis=1,
     )
 
-    # Add the statistical error on the muon polarisation ratio in quadrature.
-    if pol_frac_err is not None and not args.no_ratio_error:
-        frac_syst = np.sqrt(frac_syst**2 + pol_frac_err**2)
-
 
 print(f"Loaded {pred.shape[0]} energy bins")
-print(
-    "Muon polarisation correction: "
-    + ("OFF (--no-muon-pol)" if args.no_muon_pol else "applied")
-    + (", ratio error NOT added to the band (--no-ratio-error)"
-       if (args.no_ratio_error and not args.no_muon_pol) else "")
-)
 print(
     f"Spatial grid: "
     f"{len(xpos)} x {len(ypos)} x {len(zpos)}"

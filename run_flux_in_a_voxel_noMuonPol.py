@@ -27,10 +27,6 @@ masses = { # From dk2nu code
     'muon'   : 0.1056583715,
     'neutron': 0.93956536
 }
-# From dk2nu.h, `bsim::dkproc`. Muon *decays* (as opposed to capture) get the polarisation weight.
-dkp_mup_nusep = 11 # mu+ => nu_mu_bar + nu_e + e+
-dkp_mum_nusep = 12 # mu- => nu_mu + nu_e_bar + e-
-
 pdgs = {
     'nue'        :    12,
     'nuebar'     : -  12,
@@ -174,7 +170,7 @@ class BeamHistClass:
                 self.data[name] = np.add(self.data[name], item)
             elif isinstance(item, dict):
                 for hname, hitem in item.items():
-                    if isinstance(hitem, (float, int)):
+                    if isinstance(hitem, float) or isinstance(item, int):
                         self.data[name][hname] += hitem
                     elif isinstance(hitem, np.ndarray):
                         self.data[name][hname] = np.add(self.data[name][hname], hitem)
@@ -186,7 +182,7 @@ class BeamHistClass:
                                 self.data[name][hname][i] = np.add(self.data[name][hname][i], entry)
                     elif isinstance(hitem, dict):
                         for h2name, h2item in hitem.items():
-                            if isinstance(h2item, (float, int)):
+                            if isinstance(hitem, float) or isinstance(item, int):
                                 self.data[name][hname][h2name] += h2item
                             elif isinstance(h2item, np.ndarray):
                                 self.data[name][hname][h2name] = \
@@ -303,83 +299,7 @@ def calc_enu_wgt( decay, xy, z ):
 
     wgts_xy = sangdet * emrat**2
 
-    # Muon polarisation. A clone of the last block of `bsim::calcEnuWgt` (calcLocationWeights.cxx, l.240-331).
-    # Only applied to muon *decays* (decay.ndecay == dkp_mup_nusep or dkp_mum_nusep), not muon capture.
-    ndecay = decay['dk2nu/decay/decay.ndecay'].to_numpy() # (N,)
-    ntype  = decay['dk2nu/decay/decay.ntype'].to_numpy()  # (N,)
-    sel = np.where((ndecay == dkp_mup_nusep) | (ndecay == dkp_mum_nusep))[0] # (K,)
-
-    if sel.size > 0:
-        m_mu = masses['muon'] # python float => float64. (parent_masses above is float32, don't reuse it here.)
-        eps  = 1.0e-30
-
-        # Boost the neutrino to the muon decay CM. All (K,) / (3, K) / (M, K) / (3, M, K)
-        pdp_s  = pdp[:, sel]
-        E_s    = np.sqrt( np.sum(pdp_s**2, axis=0) + m_mu**2 )
-        gam_s  = E_s / m_mu
-        beta_s = pdp_s / E_s[None, :]
-
-        rad_s = rad[:, sel]
-        enu_s = enus[:, sel]
-        # Neutrino momentum in the beam frame, pointing from the decay vertex to the point.
-        dxyz = np.stack([ np.broadcast_to(disp_xy[0, sel][None, :], rad_s.shape),
-                          np.broadcast_to(disp_xy[1, sel][None, :], rad_s.shape),
-                          disp_z[:, sel] ])
-        p_nu = dxyz * (enu_s / rad_s)[None, :, :]
-
-        partial = gam_s[None, :] * np.einsum('ik,imk->mk', beta_s, p_nu)
-        partial = enu_s - partial / (gam_s[None, :] + 1.0)
-        # dk2nu notes this is numerically imprecise, hence float64 throughout.
-        p_dcm_nu     = p_nu - beta_s[:, None, :] * gam_s[None, None, :] * partial[None, :, :]
-        p_dcm_nu_mag = np.sqrt( np.sum(p_dcm_nu**2, axis=0) ) # (M, K)
-
-        # Boost the parent of the muon to the muon production CM. Independent of z, so (3, K) / (K,).
-        # Note that, exactly as in dk2nu, gamma here is ppenergy / parent_mass, where parent_mass is the
-        # *muon* mass because ptype is a muon. This is replicated on purpose, to match dk2nugenie.
-        pp_e  = decay['dk2nu/decay/decay.ppenergy'].to_numpy()[sel]
-        pp_z  = decay['dk2nu/decay/decay.pppz'].to_numpy()[sel]
-        pp_dx = decay['dk2nu/decay/decay.ppdxdz'].to_numpy()[sel]
-        pp_dy = decay['dk2nu/decay/decay.ppdydz'].to_numpy()[sel]
-        mupar = np.array([ decay['dk2nu/decay/decay.muparpx'].to_numpy()[sel],
-                           decay['dk2nu/decay/decay.muparpy'].to_numpy()[sel],
-                           decay['dk2nu/decay/decay.muparpz'].to_numpy()[sel] ]) # (3, K)
-        mupar_e = decay['dk2nu/decay/decay.mupare'].to_numpy()[sel]
-
-        with np.errstate(divide='ignore', invalid='ignore'):
-            gam2  = pp_e / m_mu
-            beta2 = np.array([ pp_dx * pp_z / pp_e,
-                               pp_dy * pp_z / pp_e,
-                               pp_z / pp_e ])
-            partial2 = gam2 * np.sum(beta2 * mupar, axis=0)
-            partial2 = mupar_e - partial2 / (gam2 + 1.0)
-            p_pcm_mp  = mupar - beta2 * gam2[None, :] * partial2[None, :] # (3, K)
-            p_pcm_mag = np.sqrt( np.sum(p_pcm_mp**2, axis=0) )            # (K,)
-
-            # Decay angle w.r.t. the (anti)spin direction, protected against small excursions
-            costh = np.einsum('imk,ik->mk', p_dcm_nu, p_pcm_mp) / (p_dcm_nu_mag * p_pcm_mag[None, :])
-        costh = np.clip(costh, -1.0, 1.0)
-
-        # dk2nu returns code 3 ("mu missing parent info?") before touching the weight. Do the same, so
-        # these events keep their unpolarised weight. Non-finite values (e.g. ppenergy == 0) are treated
-        # the same way, rather than propagating a nan.
-        valid = (p_pcm_mag[None, :] >= eps) & (p_dcm_nu_mag >= eps) & np.isfinite(costh)
-        costh = np.where(valid, costh, 0.0)
-
-        nt      = np.abs(ntype[sel])
-        is_e    = (nt == abs(pdgs['nue']))
-        is_mu   = (nt == abs(pdgs['numu']))
-        xnu     = 2.0 * necm[sel] / m_mu # (K,)
-        ratio_e  = 1.0 - costh
-        ratio_mu = ( (3.0 - 2.0*xnu)[None, :] - (1.0 - 2.0*xnu)[None, :] * costh ) / (3.0 - 2.0*xnu)[None, :]
-        ratio = np.where(is_e[None, :], ratio_e, np.where(is_mu[None, :], ratio_mu, 0.0))
-
-        # Return codes 4 (negative numu ratio) and 2 (not a nue/numu type) zero both enu and the weight.
-        bad = valid & ( (is_mu[None, :] & (ratio_mu < 0.0)) | (~(is_e | is_mu))[None, :] )
-        ratio = np.where(valid, ratio, 1.0)
-        ratio = np.where(bad, 0.0, ratio)
-
-        wgts_xy[:, sel] = wgts_xy[:, sel] * ratio
-        enus[:, sel]    = np.where(bad, 0.0, enu_s)
+    # TODO add muon polarisation
 
     return enus, wgts_xy # both shape (M, N)
 
@@ -426,11 +346,6 @@ def individual_thread(queue, result, index=0, xy=None, side=None, z=None):
         "dk2nu/decay/decay.necm", "dk2nu/decay/decay.nimpwt",
         "dk2nu/decay/decay.pdpx", "dk2nu/decay/decay.pdpy", "dk2nu/decay/decay.pdpz", 
         "dk2nu/decay/decay.vx", "dk2nu/decay/decay.vy", "dk2nu/decay/decay.vz",
-        # Needed for the muon polarisation weight
-        "dk2nu/decay/decay.ppenergy", "dk2nu/decay/decay.pppz",
-        "dk2nu/decay/decay.ppdxdz", "dk2nu/decay/decay.ppdydz",
-        "dk2nu/decay/decay.muparpx", "dk2nu/decay/decay.muparpy", "dk2nu/decay/decay.muparpz",
-        "dk2nu/decay/decay.mupare",
         "dk2nu/ancestor/ancestor.proc", "dk2nu/ancestor/ancestor.pdg"
     ]
     full_classes = [BeamHistClass() for _ in range(len(z))] # len = M
@@ -442,12 +357,9 @@ def individual_thread(queue, result, index=0, xy=None, side=None, z=None):
         with uproot.open(q) as fuin:
             with fuin["dk2nuTree"] as tree, fuin["dkmetaTree"] as meta_tree:
                 apots  = meta_tree["dkmeta/pots"].array(library='np')
-                NAPOT  = float(np.sum(apots))
-                # Fill this file's histograms separately, and only merge them (with the POT) into the running
-                # totals if the whole file processed successfully. Otherwise a file that fails partway
-                # would leave partial histograms behind, with or without its POT.
-                file_classes = [BeamHistClass() for _ in range(len(z))]
-                file_ok = False
+                NAPOT  = np.sum(apots)
+                for ret_class in full_classes:
+                    ret_class.data['POT'] += NAPOT                
                 try:
                     for branches in tree.iterate(needed_arrays,
                                                  step_size="1 GB"):
@@ -535,7 +447,7 @@ def individual_thread(queue, result, index=0, xy=None, side=None, z=None):
                         for htype, hitem in mask_dict.items():
                             for flav, fitem in hitem.items(): # fitem is a mask, or dict of masks.
                                 if isinstance(fitem, np.ndarray):
-                                    for ret_class, enu, wgt in zip(file_classes,
+                                    for ret_class, enu, wgt in zip(full_classes,
                                                                    enus, full_wgts):
                                         ret_class.data[htype][flav][0] += (np.histogram(
                                             enu[fitem], bins=enu_bins, weights=wgt[fitem]
@@ -547,7 +459,7 @@ def individual_thread(queue, result, index=0, xy=None, side=None, z=None):
                                                 
                                 elif isinstance(fitem, dict):
                                     for anc, pitem in fitem.items():
-                                        for ret_class, enu, wgt in zip(file_classes,
+                                        for ret_class, enu, wgt in zip(full_classes,
                                                                        enus, full_wgts):
                                             ret_class.data[htype][flav][anc][0] += (np.histogram(
                                                 enu[pitem], bins=enu_bins, weights=wgt[pitem]
@@ -557,15 +469,11 @@ def individual_thread(queue, result, index=0, xy=None, side=None, z=None):
                                             ))[0]
                                             ret_class.data[htype][flav][anc][2] += np.sum(nent[pitem])
                     
-                    file_ok = True
-
                 except Exception as e:
                     print(Fore.RED + f"Skipping file {q}, exception {e}" + Fore.RESET)
 
-                if file_ok:
-                    for total_class, file_class in zip(full_classes, file_classes):
-                        file_class.data['POT'] = NAPOT
-                        total_class.Fill(file_class.data)
+                    # remove this file's POT
+                    NPOT  -= NAPOT
 
                 pbar.update(1)
     
@@ -599,7 +507,7 @@ This is bad for performance (especially on a gpvm...). Reducing down to {NPROCES
     # We'll offload any remaining files 1 per thread
     processes = []
     NFILES_PROCESSED, NTHREADS_PROCESSED = 0, 1
-    NFILES_TARGET = NFILE_PER_THREAD+1 if NTHREADS_PROCESSED <= NFILE_REMAINDER else NFILE_PER_THREAD
+    NFILES_TARGET = NFILE_PER_THREAD+1 if NTHREADS_PROCESSED < NFILE_REMAINDER else NFILE_PER_THREAD
     file_queue, hist_queue = multiprocessing.Queue(), multiprocessing.Queue()
     for p in input_files:
         NFILES_PROCESSED += 1
@@ -626,7 +534,7 @@ This is bad for performance (especially on a gpvm...). Reducing down to {NPROCES
 
             NFILES_PROCESSED = 0
             NTHREADS_PROCESSED += 1
-            NFILES_TARGET = NFILE_PER_THREAD+1 if NTHREADS_PROCESSED <= NFILE_REMAINDER else NFILE_PER_THREAD
+            NFILES_TARGET = NFILE_PER_THREAD+1 if NTHREADS_PROCESSED < NFILE_REMAINDER else NFILE_PER_THREAD
 
     # Start spawning the processes.
     print(Fore.YELLOW + "Spawning processes with 1s delay.." + Fore.RESET)
